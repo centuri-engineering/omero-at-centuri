@@ -15,7 +15,7 @@ services:
       - "backup:/backups"
 
   omeroserver:
-    image: "openmicroscopy/omero-server:5.6"
+    image: "openmicroscopy/omero-server:5.6.1"
     environment:
       CONFIG_omero_db_host: database
       CONFIG_omero_db_user: omero
