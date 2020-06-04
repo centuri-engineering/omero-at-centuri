@@ -37,7 +37,7 @@ services:
     networks:
       - omero
     ports:
-      - "4080:4080"
+      - "127.0.0.1:4080:4080"
 
 networks:
   omero:
@@ -52,5 +52,5 @@ volumes:
   backup:
     driver_opts:
       type: none
-      device: /home/guillaume/
+      device: /mnt/md0/backups/omero
       o: bind
