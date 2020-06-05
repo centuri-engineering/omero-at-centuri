@@ -1,0 +1,27 @@
+---
+- hosts: server
+  remote_user: guillaume
+  become: yes
+  vars:
+    http_port: 80
+    max_clients: 200
+  tasks:
+  - name: ensure caddy is at the latest version
+    apt:
+      name: caddy
+      state: present
+  - name: write the caddy config file
+    template:
+      src: Caddyfile
+      dest: /etc/caddy/Caddyfile
+    notify:
+    - reload caddy
+  - name: ensure caddy is running
+    service:
+      name: caddy
+      state: started
+  handlers:
+    - name: reload caddy
+      service:
+        name: caddy
+        state: restarted

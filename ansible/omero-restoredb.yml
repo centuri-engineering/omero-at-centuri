@@ -1,0 +1,25 @@
+---
+- hosts: server
+
+  tasks:
+  - name: Drop default database
+    docker_container:
+      name: 'database'
+      image: 'postgres:11'
+      state: started
+      command: "dropdb -U omero omero"
+
+  - name: Create empty database
+    docker_container:
+      name: 'database'
+      image: 'postgres:11'
+      state: started
+      command: "createdb -U omero omero"
+
+  - name: Restored dumped database
+    docker_container:
+      name: 'database'
+      image: 'postgres:11'
+      state: started
+      command: "this fails"
+      restart: yes

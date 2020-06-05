@@ -1,0 +1,87 @@
+---
+- hosts: server
+
+  tasks:
+  - name: Create db volume
+    docker_volume:
+      name: database
+
+  - name: Create server volume
+    docker_volume:
+      name: omero
+      driver_options:
+        type: none
+        device: /mnt/md0/data/Omero-data/OMERO
+        o: bind
+
+  - name: Create backup volume
+    docker_volume:
+      name: backup
+      driver_options:
+        type: none
+        device: /mnt/md0/backups/omero
+        o: bind
+
+  - name: Create network
+    docker_network:
+      name: omero
+
+  - name: Run database
+    docker_container:
+      name: database
+      recreate: true
+      restart_policy: unless-stopped
+      image: 'postgres:11'
+      env:
+        POSTGRES_USER: "omero"
+        POSTGRES_DB: "omero"
+        POSTGRES_PASSWORD: "omero"
+      networks:
+        - name: "omero"
+      volumes:
+        - "database:/var/lib/postgresql/data"
+        - "backup:/backups"
+
+  - name: add container to inventory
+    add_host:
+      name: database
+      ansible_connection: docker
+      ansible_docker_extra_args: "-H=tcp://:4243"
+      ansible_user: jenkins
+    changed_when: false
+
+
+
+
+  - name: Run omero server
+    docker_container:
+      name: 'omeroserver'
+      recreate: true
+      restart_policy: unless-stopped
+      image: "openmicroscopy/omero-server:5.6"
+      env:
+        CONFIG_omero_db_host: "database"
+        CONFIG_omero_db_user: "omero"
+        CONFIG_omero_db_pass: "omero"
+        CONFIG_omero_db_name: "omero"
+        ROOTPASS: "omero"
+      networks:
+        - name: "omero"
+      published_ports:
+        - "4063:4063"
+        - "4064:4064"
+      volumes:
+        - "omero:/OMERO"
+
+  - name: Run omero web
+    docker_container:
+      name: 'omeroweb'
+      recreate: true
+      restart_policy: unless-stopped
+      image: "openmicroscopy/omero-web-standalone:5.6"
+      env:
+        OMEROHOST: "omeroserver"
+      networks:
+        - name: omero
+      published_ports:
+        - "127.0.0.1:4080:4080"

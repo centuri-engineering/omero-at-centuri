@@ -1,0 +1,29 @@
+{
+    local_certs
+}
+
+localhost {
+    respond "Hello, world!"
+}
+
+:2016 {
+    reverse_proxy 127.0.0.1:5001
+    tls /etc/caddy/cert.pem /etc/caddy/key.pem
+}
+
+:9000 {
+    reverse_proxy 127.0.0.1:8000
+    tls /etc/caddy/cert.pem /etc/caddy/key.pem
+}
+
+:4090 {
+    reverse_proxy 127.0.0.1:4080
+    tls /etc/caddy/cert.pem /etc/caddy/key.pem
+}
+
+:6000 {
+    reverse_proxy 127.0.0.1:6001
+    tls /etc/caddy/cert.pem /etc/caddy/key.pem
+}
+
+
