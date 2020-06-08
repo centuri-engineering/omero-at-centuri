@@ -2,24 +2,26 @@
 - hosts: server
 
   tasks:
-  - name: Drop default database
+  - name: Stop omero server
     docker_container:
-      name: 'database'
-      image: 'postgres:11'
+      name: omeroserver
+      state: stopped
+
+  - name: Stop omero web
+    docker_container:
+      name: omeroweb
+      state: stopped
+
+  - name: Start database
+    docker_container:
+      name: database
       state: started
-      command: "dropdb -U omero omero"
+
+  - name: Drop default database
+    command: docker exec database dropdb -U omero omero
 
   - name: Create empty database
-    docker_container:
-      name: 'database'
-      image: 'postgres:11'
-      state: started
-      command: "createdb -U omero omero"
+    command: docker exec database createdb -U omero omero
 
-  - name: Restored dumped database
-    docker_container:
-      name: 'database'
-      image: 'postgres:11'
-      state: started
-      command: "this fails"
-      restart: yes
+  - name: Restore dumped database
+    command: docker exec database psql -U omero -d omero -f /backups/omero.sql

@@ -29,7 +29,6 @@
   - name: Run database
     docker_container:
       name: database
-      recreate: true
       restart_policy: unless-stopped
       image: 'postgres:11'
       env:
@@ -42,21 +41,9 @@
         - "database:/var/lib/postgresql/data"
         - "backup:/backups"
 
-  - name: add container to inventory
-    add_host:
-      name: database
-      ansible_connection: docker
-      ansible_docker_extra_args: "-H=tcp://:4243"
-      ansible_user: jenkins
-    changed_when: false
-
-
-
-
   - name: Run omero server
     docker_container:
       name: 'omeroserver'
-      recreate: true
       restart_policy: unless-stopped
       image: "openmicroscopy/omero-server:5.6"
       env:
@@ -76,7 +63,6 @@
   - name: Run omero web
     docker_container:
       name: 'omeroweb'
-      recreate: true
       restart_policy: unless-stopped
       image: "openmicroscopy/omero-web-standalone:5.6"
       env:
