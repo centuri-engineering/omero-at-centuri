@@ -1,0 +1,40 @@
+---
+
+
+- hosts: server
+  vars:
+    secrets_path: centuri_secrets
+    src_dir: "{{ ansible_facts['env']['HOME'] }}/Dev"
+
+  vars_files:
+  - "{{ secrets_path }}/clicket_config.json"
+
+  tasks:
+  - name: Create db user
+    become: true
+    become_user: postgres
+    postgresql_user:
+      name: "flicket"
+      password:
+
+  - name: Create db
+    become: true
+    become_user: postgres
+    postgresql_db:
+      name: "flicket"
+      owner: "flicket"
+
+  - name: Grab clicket
+    git:
+      repo: git@github.com:centuri-engineering/clicket.git
+      dest: "{{ src_dir }}"
+
+  - name: Copy config
+    copy:
+      src: "{{ secrets_path }}/clicket_config.json"
+      dest: "{{ src_dir }}/clicket/config.json"
+
+  - name: Install dependencies
+    pip:
+      chdir: "{{ src_dir }}/clicket/"
+      requirements: "{{ src_dir }}/clicket/requirements.txt"

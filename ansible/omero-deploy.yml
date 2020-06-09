@@ -1,5 +1,9 @@
 ---
 - hosts: server
+  vars:
+    secrets_path: centuri_secrets
+  vars_files:
+  - "{{ secrets_path }}/omero_vars.yml"
 
   tasks:
   - name: Create db volume
@@ -11,7 +15,7 @@
       name: omero
       driver_options:
         type: none
-        device: /mnt/md0/data/Omero-data/OMERO
+        device: "{{ data_path }}/OMERO"
         o: bind
 
   - name: Create backup volume
@@ -19,7 +23,7 @@
       name: backup
       driver_options:
         type: none
-        device: /mnt/md0/backups/omero
+        device: "{{ backup_path }}"
         o: bind
 
   - name: Create network
@@ -34,7 +38,7 @@
       env:
         POSTGRES_USER: "omero"
         POSTGRES_DB: "omero"
-        POSTGRES_PASSWORD: "omero"
+        POSTGRES_PASSWORD: "{{ postgres_password }}"
       networks:
         - name: "omero"
       volumes:
@@ -49,9 +53,9 @@
       env:
         CONFIG_omero_db_host: "database"
         CONFIG_omero_db_user: "omero"
-        CONFIG_omero_db_pass: "omero"
+        CONFIG_omero_db_pass:  "{{ postgres_password }}"
         CONFIG_omero_db_name: "omero"
-        ROOTPASS: "omero"
+        ROOTPASS: "{{ rootpass }}"
       networks:
         - name: "omero"
       published_ports:
