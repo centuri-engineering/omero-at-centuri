@@ -1,6 +1,5 @@
 ---
 
-
 - hosts: server
   vars:
     secrets_path: centuri_secrets
@@ -26,8 +25,8 @@
 
   - name: Grab clicket
     git:
-      repo: git@github.com:centuri-engineering/clicket.git
-      dest: "{{ src_dir }}"
+      repo: https://github.com/centuri-engineering/clicket.git
+      dest: "{{ src_dir }}/clicket"
 
   - name: Copy config
     copy:
@@ -36,5 +35,13 @@
 
   - name: Install dependencies
     pip:
-      chdir: "{{ src_dir }}/clicket/"
+      virtualenv: "{{ src_dir }}/venv"
+      virtualenv_command: python3 -m venv
       requirements: "{{ src_dir }}/clicket/requirements.txt"
+
+  - name: Run the app
+    gunicorn:
+      app: wsgi:app
+      conf: "{{ src_dir }}/clicket/gunicorn.conf.py"
+      virtualenv: "{{ src_dir }}/venv"
+      chdir: "{{ src_dir }}/clicket"
