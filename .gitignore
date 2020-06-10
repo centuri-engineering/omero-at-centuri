@@ -6,3 +6,4 @@ cell-tracker
 private
 *.blend1
 __pycache__
+*secrets*
