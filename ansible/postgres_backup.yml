@@ -1,0 +1,15 @@
+---
+
+- hosts: server
+
+  tasks:
+  - name: Start omero database
+    docker_container:
+      name: database
+      state: started
+
+  - name: Dump omero databse
+    command: docker exec database pg_dump -U omero -d omero /backups/omero.dump.sql
+
+  # - name: Dump clicket database
+  #   postgresql_db:
