@@ -14,7 +14,7 @@
     become_user: postgres
     postgresql_user:
       name: "flicket"
-      password:
+      password: "{{ db_password }}"
 
   - name: Create db
     become: true

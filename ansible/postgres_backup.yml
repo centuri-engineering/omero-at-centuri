@@ -1,6 +1,10 @@
 ---
 
 - hosts: server
+  vars:
+    secrets_path: centuri_secrets
+  vars_files:
+  - "{{ secrets_path }}/omero_vars.yml"
 
   tasks:
   - name: Start omero database
@@ -9,7 +13,26 @@
       state: started
 
   - name: Dump omero databse
-    command: docker exec database pg_dump -U omero -d omero /backups/omero.dump.sql
+    command: "docker exec database pg_dump -U omero -d omero -f /backups/omero.dump.sql"
 
-  # - name: Dump clicket database
-  #   postgresql_db:
+  - name: Copy daily omero archive
+    become: true
+    file:
+      src: "{{ backup_path }}/omero.dump.sql"
+      dest: "{{ backup_path }}/omero_{{ ansible_date_time.weekday_number }}.dump.sql"
+      state: hard
+
+  - name: Dump clicket database
+    become: true
+    become_user: postgres
+    postgresql_db:
+      name: "flicket"
+      state: dump
+      target: "/mnt/md0/backups/clicket/clicket.dump.sql"
+
+  - name: Copy daily clicket archive
+    become: true
+    file:
+      src: "/mnt/md0/backups/clicket/clicket.dump.sql"
+      dest: "/mnt/md0/backups/clicket/clicket_{{ ansible_date_time.weekday_number }}.dump.sql"
+      state: hard
