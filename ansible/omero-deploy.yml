@@ -6,6 +6,12 @@
   - "{{ secrets_path }}/omero_vars.yml"
 
   tasks:
+  - name: Copy config
+    copy:
+      src: config
+      dest: "{{ data_path }}/"
+
+
   - name: Create db volume
     docker_volume:
       name: database
@@ -17,6 +23,15 @@
         type: none
         device: "{{ data_path }}/OMERO"
         o: bind
+
+  - name: Create config volume
+    docker_volume:
+      name: omero_config
+      driver_options:
+        type: none
+        device: "{{ data_path }}/config"
+        o: bind
+
 
   - name: Create backup volume
     docker_volume:
@@ -75,3 +90,5 @@
         - name: omero
       published_ports:
         - "127.0.0.1:4080:4080"
+      volumes:
+        - "omero_config:/opt/omero/web/config/"
