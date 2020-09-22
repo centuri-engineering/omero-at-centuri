@@ -2,8 +2,6 @@
 
 """Auto import script from a user directory
 """
-
-
 import os
 import json
 import logging
@@ -16,10 +14,20 @@ from pathlib import Path
 import yaml
 import numpy as np
 import omero
+from omero.gateway import (
+    BlitzGateway,
+    TagAnnotationWrapper,
+    MapAnnotationWrapper,
+    CommentAnnotationWrapper,
+)
+
 from omero.util import import_candidates
 from omero.cli import CLI
 
 log = logging.getLogger(__name__)
+logfile = logging.FileHandler("auto_importer.log")
+log.setLevel("INFO")
+log.addHandler(logfile)
 
 
 def get_configuration(pth):
@@ -66,43 +74,13 @@ def get_configuration(pth):
             print(f"using {conf.absolute().as_posix()} configuration file")
             with open(conf, "r") as f:
                 return yaml.safe_load(f)
-    else:
-        raise FileNotFoundError("User configuration file not found")
+    raise FileNotFoundError("User configuration file not found")
 
 
-def get_annotations(pth):
-    """Walks up from the directory 'pth' until a file named omero_annotations.csv is found.
+def collect_annotations(base_dir):
 
-    Returns a numpy array from the parsed file.
-
-    Parameters
-    ----------
-    pth: string or Path
-         the path from which to search the configuration file
-
-    Returns
-    -------
-    annotations: np.ndarray of shape (n, 2)
-         key-value pairs to annotate the images with
-
-
-    """
-
-    ann = pth / "omero_annotations.csv"
-    if ann.is_file():
-        print(f"using {ann.absolute().as_posix()} annotation file")
-        annotations = np.loadtxt(ann, dtype="object", delimiter=",")
-        return annotations
-
-    for parent in pth.parents:
-        ann = parent / "omero_annotations.csv"
-        if ann.is_file():
-            print(f"using {ann.absolute().as_posix()} annotation file")
-            annotations = np.loadtxt(ann, dtype="object", delimiter=",")
-            return annotations
-    else:
-        log.info("No annotation file named omero_annotations.csv was found")
-        return np.empty((0, 2))
+    base_dir = Path(base_dir)
+    annotations = base_dir.glob("**/omero_annotation.yml")
 
 
 def create_bulk_yml(**kwargs):
@@ -190,14 +168,27 @@ def create_bulk_tsv(candidates, base_path, conf):
 def auto_import(directory, dry_run=False, reset=True):
 
     directory = Path(directory)
-
     conf = get_configuration(directory)
     create_bulk_yml(dry_run=dry_run)
-    base_path = conf.get("base_path", directory.as_posix())
 
     if not Path("files.tsv").is_file() or reset:
         candidates = import_candidates.as_dictionary(directory.as_posix())
-        create_bulk_tsv(candidates, base_path, conf)
+        create_bulk_tsv(candidates, directory, conf)
+
+    all_ymls = directory.glob("**/*.yml")
+    annotation_ymls = [yml for yml in all_ymls if _is_annotation(yml)]
+    annotation_dirs = [yml.parent for yml in annotation_ymls]
+
+    for annotation_yml in annotation_ymls:
+        import_and_annotate(conf, annotation_yml)
+
+
+def _is_annotation(yml):
+    with open(yml, "r") as fh:
+        return "# omero annotation file" in fh.readline()
+
+
+def import_and_annotate(conf, annotation_yml):
 
     cmd = [
         "import",
@@ -221,22 +212,74 @@ def auto_import(directory, dry_run=False, reset=True):
     cli = CLI()
     cli.loadplugins()
     cli.invoke(cmd)
-    return candidates
-
-    # print(cmd)
+    auto_annotate(conf, "out.txt", annotation_yml)
 
 
-def auto_annotate(candidates):
+def auto_annotate(conf, out_file, annotation_yml):
 
-    paths = sorted(candidates, key=lambda p: Path(p).parent.as_posix())
-    for fullpath in paths:
-        annotations = get_annotations(fullpath)
-        if annotations.shape[0]:
-            pass
-    # TODO
+    conn = BlitzGateway(
+        conf["username"], conf["password"], host=conf["server"], port=conf["port"]
+    )
+    conn.connect()
+    datasets = get_datasets(conn, out_file)
+    for dataset_id in datasets:
+        annotate(conn, dataset_id, annotation_yml)
 
 
-def clean():
+def get_datasets(conn, out_file):
 
-    # TODO
-    pass
+    datasets = []
+
+    with open(out_file, "r") as out:
+        for line in out:
+            if not line.startswith("Image"):
+                continue
+            if "," in line:
+                line = line.split(",")[0]
+            im_id = int(line.split(":")[1])
+            datasets.append(conn.getObject("Image", im_id).getParent().getId())
+    return set(datasets)
+
+
+def annotate(conn, dataset_id, annotation_yml):
+    """Applies the annotations in `annotation_yml` to the dataset
+
+    Parameters
+    ----------
+    conn: An `omero.gateway.BlitzGateway` connection
+    dataset_id: int - the Id of the dataset to annotate
+    annnotation_yml: str or `Path` a yml file containing the annotation
+
+    """
+    dataset = conn.GetObject("Dataset", dataset_id)
+    log.info(f"\n")
+    log.info(f"Annotating dataset {dataset_id}")
+
+    with Path(annotation_yml).open("r") as ann_yml:
+        ann = yaml.safe_load(ann_yml)
+
+    key_value_pairs = list(ann.get("kv_pairs", {}).items())
+    if key_value_pairs:
+        log.info("Map annotations: ")
+        log.info("\n".join([f"{k}: {v}" for k, v in key_value_pairs]))
+        map_ann = MapAnnotationWrapper(conn)
+        namespace = omero.constants.metadata.NSCLIENTMAPANNOTATION
+        map_ann.setNs(namespace)
+        map_ann.setValue(key_value_pairs)
+        map_ann.save()
+        dataset.linkAnnotation(map_ann)
+
+    for tag in ann.get("tags", []):
+        log.info(f"Adding tag: {tag}")
+        tag_ann = TagAnnotationWrapper(conn)
+        tag_ann.setValue(tag)
+        tag_ann.save()
+        dataset.linkAnnotation(tag_ann)
+
+    comment = ann.get("comment", "")
+    if comment:
+        log.info(f"Adding comment: {comment}")
+        com_ann = CommentAnnotationWrapper(conn)
+        com_ann.setValue(comment)
+        com_ann.save()
+        dataset.linkAnnotation(com_ann)
