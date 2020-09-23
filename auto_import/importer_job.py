@@ -26,6 +26,8 @@ def auto_import(base_dir, dry_run=False, reset=True, clean=False):
     base_dir = Path(base_dir)
     conf = get_configuration(base_dir)
 
+    conf["base_dir"] = base_dir
+
     _, bulk_yml = tempfile.mkstemp(suffix=".yml", text=True)
     log.info(f"creating bulk yaml {bulk_yml}")
 
@@ -45,10 +47,15 @@ def auto_import(base_dir, dry_run=False, reset=True, clean=False):
         candidates = import_candidates.as_dictionary(base_dir.as_posix())
         create_bulk_tsv(candidates, base_dir, conf)
 
+    if dry_run:
+        return conf
+
     perform_import(conf)
     if clean:
         for tmp in (bulk_yml, tsv_file, out_file):
             os.remove(tmp)
+
+    print(conf)
     return conf
 
 
@@ -168,7 +175,7 @@ def create_bulk_yml(bulk_yml="bulk.yml", **kwargs):
         yaml.dump(bulk_opts, yml_file)
 
 
-def create_bulk_tsv(candidates, base_dir, conf, out_file="files.tsv"):
+def create_bulk_tsv(candidates, base_dir, conf):
 
     lines = []
     last_project = ""
@@ -206,6 +213,9 @@ def create_bulk_tsv(candidates, base_dir, conf, out_file="files.tsv"):
             last_project = project
 
         lines.append("\t".join((target, name, fullpath + "\n")))
+
+    log.info(f"Preparing to import {len(lines)} files")
+    out_file = conf.get("tsv_file", "files.tsv")
 
     with open(out_file, "w") as f:
         f.writelines(lines)

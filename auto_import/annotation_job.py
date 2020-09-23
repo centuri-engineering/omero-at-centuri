@@ -22,7 +22,7 @@ log.setLevel("INFO")
 log.addHandler(logfile)
 
 
-def auto_annotate(conf):
+def auto_annotate(conf, dry_run=False):
 
     conn = BlitzGateway(
         username=conf["username"],
@@ -32,6 +32,11 @@ def auto_annotate(conf):
     )
     pairs = pair_annotation_to_datasets(conf["base_dir"], conf["tsv_file"], conn)
     log.info(f"Annotating {len(pairs)} dataset/annotation pairs")
+    if dry_run:
+        print("Would annotate:")
+        print(pairs)
+        return
+
     for dset_id, annotation_yml in pairs:
         annotate(conn, dset_id, annotation_yml, object_type="Dataset")
 
