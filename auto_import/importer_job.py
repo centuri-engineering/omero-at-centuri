@@ -208,10 +208,10 @@ def create_bulk_tsv(candidates, base_dir, conf):
 
         if project == last_project:
             ## use the latest existing dataset
-            target = f'Project:name:"{project}"/Dataset:+name:"{dataset}"'
+            target = f"Project:name:{project}/Dataset:+name:{dataset}"
         else:
             ## create a new dataset
-            target = f'Project:name:"{project}"/Dataset:@name:"{dataset}"'
+            target = f"Project:name:{project}/Dataset:@name:{dataset}"
             last_project = project
 
         lines.append("\t".join((target, name, fullpath + "\n")))
