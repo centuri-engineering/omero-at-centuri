@@ -107,7 +107,7 @@ def pair_annotation_to_datasets(conn, base_dir, tsv_file):
     base_dir = Path(base_dir)
     with open(tsv_file, "r") as tsvf:
         new_datasets = [
-            _parse_tsv_line(line) for line in tsvf if "Dataset:+name:" in line
+            _parse_tsv_line(line) for line in tsvf if "Dataset:@name:" in line
         ]
 
     annotation_ymls = collect_annotations(base_dir)
