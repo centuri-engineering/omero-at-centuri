@@ -41,6 +41,8 @@ def auto_import(base_dir, dry_run=False, reset=True, clean=False):
     conf["tsv_file"] = tsv_file
     conf["out_file"] = out_file
 
+    log.info("\n".join(f"{k}: {v}" for k, v in conf.items()))
+
     create_bulk_yml(bulk_yml=bulk_yml, dry_run=dry_run, path=tsv_file)
 
     if not Path(tsv_file).is_file() or reset:
@@ -55,7 +57,6 @@ def auto_import(base_dir, dry_run=False, reset=True, clean=False):
         for tmp in (bulk_yml, tsv_file, out_file):
             os.remove(tmp)
 
-    print(conf)
     return conf
 
 
@@ -86,6 +87,7 @@ def perform_import(conf):
     ]
     cli = CLI()
     cli.loadplugins()
+    log.info(f"Invoking omero {' '.join(cmd)}")
     cli.invoke(cmd)
 
 
@@ -170,7 +172,7 @@ def create_bulk_yml(bulk_yml="bulk.yml", **kwargs):
     }
     bulk_opts.update(kwargs)
 
-    log.debug(f"bulk options: {bulk_opts}")
+    log.info(f"bulk options: {bulk_opts}")
     with open(bulk_yml, "w") as yml_file:
         yaml.dump(bulk_opts, yml_file)
 
