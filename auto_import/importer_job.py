@@ -2,24 +2,93 @@
 
 """Auto import script from a user directory
 """
-
-
 import os
-import json
 import logging
-import shutil
-import subprocess
+import tempfile
 from datetime import date
 
 from pathlib import Path
 
 import yaml
-import numpy as np
 import omero
+
 from omero.util import import_candidates
 from omero.cli import CLI
 
 log = logging.getLogger(__name__)
+logfile = logging.FileHandler("auto_importer.log")
+log.setLevel("INFO")
+log.addHandler(logfile)
+
+
+def auto_import(base_dir, dry_run=False, reset=True, clean=False):
+
+    base_dir = Path(base_dir)
+    conf = get_configuration(base_dir)
+
+    conf["base_dir"] = base_dir
+
+    _, bulk_yml = tempfile.mkstemp(suffix=".yml", text=True)
+    log.info(f"creating bulk yaml {bulk_yml}")
+
+    _, tsv_file = tempfile.mkstemp(suffix=".tsv", text=True)
+    log.info(f"creating tsv_file {tsv_file}")
+
+    _, out_file = tempfile.mkstemp(suffix=".out", text=True)
+    log.info(f"creating out_file {out_file}")
+
+    conf["bulk_yml"] = bulk_yml
+    conf["tsv_file"] = tsv_file
+    conf["out_file"] = out_file
+
+    log.info("\n".join(f"{k}: {v}" for k, v in conf.items()))
+
+    create_bulk_yml(bulk_yml=bulk_yml, dry_run=dry_run, path=tsv_file)
+
+    if not Path(tsv_file).is_file() or reset:
+        candidates = import_candidates.as_dictionary(base_dir.as_posix())
+        create_bulk_tsv(candidates, base_dir, conf)
+
+    if dry_run:
+        return conf
+
+    perform_import(conf)
+    if clean:
+        for tmp in (bulk_yml, tsv_file, out_file):
+            os.remove(tmp)
+
+    return conf
+
+
+def perform_import(conf):
+
+    # TODO use `sudo` to login as root and not store the pswds
+    # see https://docs.openmicroscopy.org/omero/5.6.2/users/cli/sessions.html
+
+    cmd = [
+        "import",
+        "-s",
+        conf["server"],
+        "-p",
+        conf["port"],
+        "-u",
+        conf["username"],
+        "-w",
+        conf["password"],
+        "-g",
+        conf["group"],
+        "--exclude",
+        "--file",
+        Path(conf["out_file"]).absolute().as_posix(),
+        "--errs",
+        Path("err.txt").absolute().as_posix(),
+        "--bulk",
+        conf["bulk_yml"],
+    ]
+    cli = CLI()
+    cli.loadplugins()
+    log.info(f"Invoking omero {' '.join(cmd)}")
+    cli.invoke(cmd)
 
 
 def get_configuration(pth):
@@ -39,7 +108,7 @@ def get_configuration(pth):
     For example:
 
     .. code::
-        {'base_path': 'User data root directory',
+        {'base_dir': 'User data root directory',
          'group': 'Prof Prakash',
          'password': 'XXXXX',
          'port': '4064',
@@ -66,46 +135,10 @@ def get_configuration(pth):
             print(f"using {conf.absolute().as_posix()} configuration file")
             with open(conf, "r") as f:
                 return yaml.safe_load(f)
-    else:
-        raise FileNotFoundError("User configuration file not found")
+    raise FileNotFoundError("User configuration file not found")
 
 
-def get_annotations(pth):
-    """Walks up from the directory 'pth' until a file named omero_annotations.csv is found.
-
-    Returns a numpy array from the parsed file.
-
-    Parameters
-    ----------
-    pth: string or Path
-         the path from which to search the configuration file
-
-    Returns
-    -------
-    annotations: np.ndarray of shape (n, 2)
-         key-value pairs to annotate the images with
-
-
-    """
-
-    ann = pth / "omero_annotations.csv"
-    if ann.is_file():
-        print(f"using {ann.absolute().as_posix()} annotation file")
-        annotations = np.loadtxt(ann, dtype="object", delimiter=",")
-        return annotations
-
-    for parent in pth.parents:
-        ann = parent / "omero_annotations.csv"
-        if ann.is_file():
-            print(f"using {ann.absolute().as_posix()} annotation file")
-            annotations = np.loadtxt(ann, dtype="object", delimiter=",")
-            return annotations
-    else:
-        log.info("No annotation file named omero_annotations.csv was found")
-        return np.empty((0, 2))
-
-
-def create_bulk_yml(**kwargs):
+def create_bulk_yml(bulk_yml="bulk.yml", **kwargs):
     """Creates the bulk.yml file in the current directory
 
     Any keyword argument will update the default setting.
@@ -139,12 +172,12 @@ def create_bulk_yml(**kwargs):
     }
     bulk_opts.update(kwargs)
 
-    log.debug(f"bulk options: {bulk_opts}")
-    with open("bulk.yml", "w") as yml_file:
+    log.info(f"bulk options: {bulk_opts}")
+    with open(bulk_yml, "w") as yml_file:
         yaml.dump(bulk_opts, yml_file)
 
 
-def create_bulk_tsv(candidates, base_path, conf):
+def create_bulk_tsv(candidates, base_dir, conf):
 
     lines = []
     last_project = ""
@@ -152,7 +185,7 @@ def create_bulk_tsv(candidates, base_path, conf):
     # group candidates by directory
     paths = sorted(candidates, key=lambda p: Path(p).parent.as_posix())
     for fullpath in paths:
-        parts = Path(fullpath).relative_to(base_path).parts
+        parts = Path(fullpath).relative_to(base_dir).parts
         if len(parts) == 1:
             project = conf.get("project", "no_project")
             dataset = date.today().isoformat()
@@ -183,60 +216,8 @@ def create_bulk_tsv(candidates, base_path, conf):
 
         lines.append("\t".join((target, name, fullpath + "\n")))
 
-    with open("files.tsv", "w") as f:
+    log.info(f"Preparing to import {len(lines)} files")
+    out_file = conf.get("tsv_file", "files.tsv")
+
+    with open(out_file, "w") as f:
         f.writelines(lines)
-
-
-def auto_import(directory, dry_run=False, reset=True):
-
-    directory = Path(directory)
-
-    conf = get_configuration(directory)
-    create_bulk_yml(dry_run=dry_run)
-    base_path = conf.get("base_path", directory.as_posix())
-
-    if not Path("files.tsv").is_file() or reset:
-        candidates = import_candidates.as_dictionary(directory.as_posix())
-        create_bulk_tsv(candidates, base_path, conf)
-
-    cmd = [
-        "import",
-        "-s",
-        conf["server"],
-        "-p",
-        conf["port"],
-        "-u",
-        conf["username"],
-        "-w",
-        conf["password"],
-        "-g",
-        conf["group"],
-        "--file",
-        Path("out.txt").absolute().as_posix(),
-        "--errs",
-        Path("err.txt").absolute().as_posix(),
-        "--bulk",
-        "bulk.yml",
-    ]
-    cli = CLI()
-    cli.loadplugins()
-    cli.invoke(cmd)
-    return candidates
-
-    # print(cmd)
-
-
-def auto_annotate(candidates):
-
-    paths = sorted(candidates, key=lambda p: Path(p).parent.as_posix())
-    for fullpath in paths:
-        annotations = get_annotations(fullpath)
-        if annotations.shape[0]:
-            pass
-    # TODO
-
-
-def clean():
-
-    # TODO
-    pass
