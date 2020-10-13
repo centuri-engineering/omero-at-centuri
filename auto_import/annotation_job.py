@@ -1,11 +1,26 @@
+"""Auto annotation of omero database files from .toml annotation files
+
+
+Example annotation file
+=======================
+
+..code:
+
+
+
+"""
+# TODO finish module level doc
+
+
 import os
 import logging
 import tempfile
 from datetime import date
 
 from pathlib import Path
+from functools import wraps
 
-import yaml
+import toml
 import numpy as np
 import omero
 from omero.gateway import (
@@ -23,7 +38,9 @@ log.addHandler(logfile)
 
 
 def auto_reconnect(fun):
+
     # assumes the connection object is the first argument
+    @wraps(fun)
     def decorrated(*args, **kwargs):
         conn = args[0]
         if not conn.isConnected():
@@ -34,7 +51,29 @@ def auto_reconnect(fun):
 
 
 def auto_annotate(conf, dry_run=False):
+    """Parses a directory and adds annotation to imported
+    files in omero.
 
+    Parameters
+    ----------
+    conf: dictionary
+        the following keys are expected:
+        - "username"
+        - "password"
+        - "server"
+        - "port"
+        - "base_dir"
+        - "tsv_file"
+    dry_run: bool, default False
+
+    `base_dir` is the path to the directory to be imported, and
+    `tsv_file` is the tab separated file used to bulk-import the data
+
+    See Also
+    --------
+
+    importer_job.create_bulk_tsv : the function used to generate the `tsv_file`
+    """
     conn = BlitzGateway(
         username=conf["username"],
         passwd=conf["password"],
@@ -49,30 +88,30 @@ def auto_annotate(conf, dry_run=False):
             print(pairs)
             return
 
-        for dset_id, annotation_yml in pairs:
-            annotate(conn, dset_id, annotation_yml, object_type="Dataset")
+        for dset_id, annotation_toml in pairs:
+            annotate(conn, dset_id, annotation_toml, object_type="Dataset")
     finally:
         conn.close()
 
 
 @auto_reconnect
-def annotate(conn, object_id, annotation_yml, object_type="Dataset"):
-    """Applies the annotations in `annotation_yml` to the dataset
+def annotate(conn, object_id, annotation_toml, object_type="Dataset"):
+    """Applies the annotations in `annotation_toml` to the dataset
 
     Parameters
     ----------
     conn: An `omero.gateway.BlitzGateway` connection
     dataset_id: int - the Id of the dataset to annotate
-    annnotation_yml: str or `Path` a yml file containing the annotation
+    annnotation_toml: str or `Path` a toml file containing the annotation
 
     """
-    annotation_yml = Path(annotation_yml)
+    annotation_toml = Path(annotation_toml)
     annotated = conn.getObject(object_type, object_id)
     log.info(f"\n")
-    log.info(f"Annotating {object_type} {object_id} with {annotation_yml.as_posix()}")
+    log.info(f"Annotating {object_type} {object_id} with {annotation_toml.as_posix()}")
 
-    with annotation_yml.open("r") as ann_yml:
-        ann = yaml.safe_load(ann_yml)
+    with annotation_toml.open("r") as ann_toml:
+        ann = toml.load(ann_toml)
 
     key_value_pairs = list(ann.get("kv_pairs", {}).items())
     if key_value_pairs:
@@ -103,25 +142,29 @@ def annotate(conn, object_id, annotation_yml, object_type="Dataset"):
 
 @auto_reconnect
 def pair_annotation_to_datasets(conn, base_dir, tsv_file):
+    """Parses the input tsv_file to find correspondances between imported datasets and
+    annotation files within the directory.
 
+
+    """
     base_dir = Path(base_dir)
     with open(tsv_file, "r") as tsvf:
         new_datasets = [
             _parse_tsv_line(line) for line in tsvf if "Dataset:@name:" in line
         ]
 
-    annotation_ymls = collect_annotations(base_dir)
-    log.info(annotation_ymls)
+    annotation_tomls = collect_annotations(base_dir)
+    log.info(annotation_tomls)
     pairs = []
     for dataset in new_datasets:
         dset_dir = dataset["directory"].relative_to(base_dir)
         dset_id = _find_dataset_id(conn, dataset)["dataset"]
-        if dset_dir in annotation_ymls:
-            pairs.append((dset_id, annotation_ymls[dset_dir]))
+        if dset_dir in annotation_tomls:
+            pairs.append((dset_id, annotation_tomls[dset_dir]))
         else:
             for parent in list(dset_dir.parents)[::-1]:
-                if parent in annotation_ymls:
-                    pairs.append((dset_id, annotation_ymls[parent]))
+                if parent in annotation_tomls:
+                    pairs.append((dset_id, annotation_tomls[parent]))
                     break
             else:
                 log.info(f"No annotation found above {dset_dir}")
@@ -130,7 +173,7 @@ def pair_annotation_to_datasets(conn, base_dir, tsv_file):
 
 @auto_reconnect
 def _find_dataset_id(conn, dataset):
-
+    """Query the omero db to find the dataset id based on its name"""
     dsets = conn.getObjects("Dataset", attributes={"name": dataset["dataset"]})
     for dset in dsets:
         projs = [p for p in dset.getAncestry() if p.name == dataset["project"]]
@@ -143,16 +186,17 @@ def _find_dataset_id(conn, dataset):
 
 
 def collect_annotations(base_dir):
+    """Finds annotation files throughout the base_dir directory"""
 
     base_dir = Path(base_dir)
-    all_ymls = base_dir.glob("**/*.yml")
+    all_tomls = base_dir.glob("**/*.toml")
     # This is relative to base_dir
-    annotation_ymls = {
-        yml.parent.relative_to(base_dir): base_dir / yml
-        for yml in all_ymls
-        if _is_annotation(base_dir / yml)
+    annotation_tomls = {
+        toml.parent.relative_to(base_dir): base_dir / toml
+        for toml in all_tomls
+        if _is_annotation(base_dir / toml)
     }
-    return annotation_ymls
+    return annotation_tomls
 
 
 def _parse_tsv_line(tsv_line):
@@ -169,15 +213,15 @@ def _parse_tsv_line(tsv_line):
 
 
 def _has_annotation(directory):
-    ymls = Path(directory).glob("*.yml")
-    if not ymls:
+    tomls = Path(directory).glob("*.toml")
+    if not tomls:
         return False
-    for yml in ymls:
-        if _is_annotation(yml):
-            return yml
+    for toml_file in tomls:
+        if _is_annotation(toml):
+            return toml_file
     return False
 
 
-def _is_annotation(yml):
-    with open(yml, "r") as fh:
+def _is_annotation(toml_file):
+    with open(toml_file, "r") as fh:
         return "# omero annotation file" in fh.readline()
