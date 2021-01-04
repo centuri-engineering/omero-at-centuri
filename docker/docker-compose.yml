@@ -2,7 +2,7 @@ version: "3"
 
 services:
 
-  database:
+  db_omero:
     image: "postgres:11"
     environment:
       POSTGRES_USER: omero
@@ -11,13 +11,13 @@ services:
     networks:
       - omero
     volumes:
-      - "database:/var/lib/postgresql/data"
+      - "db_omero:/var/lib/postgresql/data"
       - "backup:/backups"
 
   omeroserver:
     image: "openmicroscopy/omero-server:5.6"
     environment:
-      CONFIG_omero_db_host: database
+      CONFIG_omero_db_host: db_omero
       CONFIG_omero_db_user: omero
       CONFIG_omero_db_pass: omero
       CONFIG_omero_db_name: omero
@@ -34,6 +34,8 @@ services:
     image: "openmicroscopy/omero-web-standalone:5.6"
     environment:
       OMEROHOST: omeroserver
+      CONFIG_omero_web_prefix: "/omero"
+      CONFIG_omero_web_static__url: "/omero/static/"
     networks:
       - omero
     ports:
@@ -43,14 +45,14 @@ networks:
   omero:
 
 volumes:
-  database:
+  db_omero:
   omero:
     driver_opts:
       type: none
-      device: /mnt/md0/data/Omero-data/OMERO
+      device: /home/guillaume/data/OMERO
       o: bind
   backup:
     driver_opts:
       type: none
-      device: /mnt/md0/backups/omero
+      device: /home/guillaume/data/backups/omero
       o: bind
