@@ -71,19 +71,23 @@ def perform_import(conf):
         conf["server"],
         "-p",
         conf["port"],
+        "--transfer",
+        "ln_s",
+        "--sudo",
+        "root",
         "-u",
         conf["username"],
-        "-w",
-        conf["password"],
         "-g",
         conf["group"],
         "--exclude",
+        "clientpath",
         "--file",
         Path(conf["out_file"]).absolute().as_posix(),
         "--errs",
         Path("err.txt").absolute().as_posix(),
         "--bulk",
         conf["bulk_yml"],
+
     ]
     cli = CLI()
     cli.loadplugins()
