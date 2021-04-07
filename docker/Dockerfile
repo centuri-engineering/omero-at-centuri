@@ -1,6 +1,9 @@
 FROM openmicroscopy/omero-server:latest
 
 USER root
+RUN yum install -y cifs-utils
+
+
 
 # https://docs.openmicroscopy.org/omero/5.6.3/sysadmins/in-place-import.html
 RUN adduser importer
