@@ -1,0 +1,10 @@
+---
+
+- hosts: running
+  connection: docker
+  gather_facts: no
+  tasks:
+    - debug:
+        msg: "echo test"
+    - shell:
+        cmd: "echo 'shell test'"

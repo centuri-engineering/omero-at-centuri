@@ -1,0 +1,10 @@
+---
+
+- hosts: "image_postgres:11"
+  - name: Dump  database
+    become: true
+    become_user: postgres
+    postgresql_db:
+      name: "flicket"
+      state: dump
+      target: "/mnt/md0/backups/clicket/clicket.dump.sql"
