@@ -4,10 +4,11 @@ services:
 
   db_omero:
     image: "postgres:11"
+    restart: always
     environment:
       POSTGRES_USER: omero
       POSTGRES_DB: omero
-      POSTGRES_PASSWORD: omero
+      POSTGRES_PASSWORD: XXX
     networks:
       - omero
     volumes:
@@ -15,27 +16,31 @@ services:
       - "backup:/backups"
 
   omeroserver:
-    image: "openmicroscopy/omero-server:5.6"
-    environment:
-      CONFIG_omero_db_host: db_omero
-      CONFIG_omero_db_user: omero
-      CONFIG_omero_db_pass: omero
-      CONFIG_omero_db_name: omero
-      ROOTPASS: omero
+    image: "centuri/centuri-omero-server:latest"
+    restart: always
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - DAC_READ_SEARCH
+    env_file:
+      - .env
     networks:
       - omero
     ports:
-      - "4063:4063"
       - "4064:4064"
+      - "4065:4065"
+      - "4066:4066"
     volumes:
       - "omero:/OMERO"
-
+      - "./certs:/etc/ssl/selfsigned:ro${VOLOPTS-}"
+      - "teamimagerie:/mnt/teamimagerie"
   omeroweb:
-    image: "openmicroscopy/omero-web-standalone:5.6"
+    image: "openmicroscopy/omero-web-standalone:latest"
+    restart: always
     environment:
       OMEROHOST: omeroserver
-      CONFIG_omero_web_prefix: "/omero"
-      CONFIG_omero_web_static__url: "/omero/static/"
+      CONFIG_omero_web__check_version: "false"
+      CONFIG_omero_web_secure: "true"
     networks:
       - omero
     ports:
@@ -49,10 +54,16 @@ volumes:
   omero:
     driver_opts:
       type: none
-      device: /home/guillaume/data/OMERO
+      device: XXX/data/OMERO
       o: bind
   backup:
     driver_opts:
       type: none
-      device: /home/guillaume/data/backups/omero
+      device: XXX/data/backups/omero
       o: bind
+  teamimagerie:
+    driver: local
+    driver_opts:
+      type: cifs
+      o: ro,vers=1.0,cache=strict,username=XXX,password=XXX,addr=XXX,file_mode=0444,dir_mode=0555
+      device: "//XX/XXXXX/"
