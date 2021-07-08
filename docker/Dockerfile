@@ -4,14 +4,6 @@ USER root
 RUN yum install -y cifs-utils
 
 
-
-# https://docs.openmicroscopy.org/omero/5.6.3/sysadmins/in-place-import.html
-# RUN adduser importer
-# RUN usermod -aG omero-server importer
-# RUN chgrp -R importer /OMERO/ManagedRepository/
-# RUN chmod -R g+rws /OMERO/ManagedRepository/
-# # set umask to 0002 and start the server
-# ADD 99-run.sh /startup/
 USER omero-server
 WORKDIR /opt/omero/server/
 RUN wget https://github.com/centuri-engineering/impomero/archive/refs/heads/main.zip
