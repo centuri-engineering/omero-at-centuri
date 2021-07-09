@@ -8,3 +8,5 @@ private
 __pycache__
 *secrets*
 test_omero/data/OMERO/
+test_omero/data/impomero.sql
+test_omero/data/raw/**/*.toml
