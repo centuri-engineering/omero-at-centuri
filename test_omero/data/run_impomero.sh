@@ -11,4 +11,4 @@ export IMPOMERO_DB=/data/impomero.sql
 
 
 source venv3/bin/activate
-python -m impomero -l /data/raw/dir0
+python -m impomero -l /data/raw/
