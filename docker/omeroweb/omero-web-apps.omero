@@ -1,0 +1,5 @@
+# omero-3D script
+config set -- omero.web.omero_3Dscript.fiji_bin "/usr/local/share/Fiji.app/ImageJ-linux64"
+config append -- omero.web.apps '"omero_3Dscript"'
+config append -- omero.web.open_with '["3Dscript", "3Dscript_index", {"supported_objects": ["image"], "target": "_blank", "label": "3Dscript"}]'
+config append -- omero.web.ui.top_links '["3Dscript", "3Dscript_index", {"title": "Open 3Dscript in a new tab", "target": "_blank"}]'
