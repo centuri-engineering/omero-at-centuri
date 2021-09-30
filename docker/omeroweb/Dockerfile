@@ -5,21 +5,25 @@ USER root
 RUN yum install -y \
     ffmpeg \
     wget \
-    unzip \
-    scl-utils \
-    scl-utils-build \
-    centos-release-scl
+    unzip
+
+RUN yum groupinstall "Development Tools" -y
 
 RUN yum install -y \
-    devtoolset-8-gcc \
-    devtoolset-8-gcc-c++
+    gmp-devel \
+    mpfr-devel \
+    libmpc-devel
 
-RUN scl enable devtoolset-8 -- bash
-ENV PATH=/opt/rh/devtoolset-8/root/usr/bin/:$PATH
-#ENV LD_LIBRARY_PATH=/opt/rh/devtoolset-8/root/usr/bin/
-# TODO: change "@/sbin/ldconfig" to "/sbin/ldconfig" in /etc/nvidia-container-runtime/config.toml
+RUN mkdir /gcc && \
+    cd /gcc && \
+    wget https://ftp.mpi-inf.mpg.de/mirrors/gnu/mirror/gcc.gnu.org/pub/gcc/snapshots/8.5.0-RC-20210507/gcc-8.5.0-RC-20210507.tar.gz && \
+    tar -zxf gcc-8.5.0-RC-20210507.tar.gz && \
+    cd gcc-8.5.0-RC-20210507 && \
+    ./configure --disable-multilib --enable-languages=c,c++ --prefix=/opt/gcc8 && \
+        make -j5 && \
+        make -j install
 
-
+ENV LD_LIBRARY_PATH=/opt/gcc8/lib64/
 
 RUN yum install -y epel-release && \
     yum install -y \
